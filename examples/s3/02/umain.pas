@@ -5,8 +5,8 @@ unit umain;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  Buttons, ExtCtrls, EditBtn,
+  Classes, SysUtils, FileUtil, LazFileUtils, Forms, Controls, Graphics, Dialogs,
+  StdCtrls, Buttons, ExtCtrls, EditBtn,
   //aws
   aws_client,
   aws_s3;
@@ -63,15 +63,13 @@ implementation
 { TfrmMain }
 
 procedure TfrmMain.btnTestAccessClick(Sender: TObject);
-var
-  Cred: IAWSCredentials;
-  Client: IAWSClient;
 begin
-  Cred := TAWSCredentials.Create(edtAcessKeyId.Text, edtSecretKey.Text, True);
-  Client := TAWSClient.Create(Cred);
-  FRegion := nil;
-  FRegion := TS3Region.Create(Client);
-  if FRegion.IsOnline then
+  FRegion := TS3Region.Create(
+    TAWSClient.Create(
+      TAWSCredentials.Create(edtAcessKeyId.Text, edtSecretKey.Text, True)
+    )
+  );
+  if FRegion.Online then
   begin
     pnlServices.Visible := True;
   end
@@ -113,7 +111,7 @@ begin
     Exit;
   end;
 
-  if not FileExistsUTF8(fneFile.FileName) then
+  if not LazFileUtils.FileExistsUTF8(fneFile.FileName) then
   begin
     ShowMessage('File not exists');
     fneFile.SetFocus;
@@ -137,7 +135,10 @@ begin
   end;
 
   Bkt := FRegion.Buckets.Get(edtBucketName.Text, edtBucketSubResource.Text);
-  Bkt.Objects.Get(edtObjectName.Text, fneFile.FileName, edtObjectSubResource.Text);
+  Bkt.Objects.Get(
+    edtObjectName.Text,
+    edtObjectSubResource.Text
+  ).Stream.SaveToFile(fneFile.FileName);
   ShowMessage('Success!')
 end;
 

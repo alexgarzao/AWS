@@ -1,6 +1,6 @@
 {
     AWS
-    Copyright (C) 2013-2014 by mdbs99
+    Copyright (C) 2013-2015 Marcos Douglas - mdbs99
 
     See the file LICENSE.txt, included in this distribution,
     for details about the copyright.
@@ -22,13 +22,14 @@ uses
   //synapse
   synautil,
   //aws
-  aws_sys,
+  aws_base,
   aws_client;
+
+const
+  AWS_S3_URL = 's3.amazonaws.com';
 
 type
   ES3Error = class(Exception);
-
-  IS3Response = IAWSResponse;
 
   IS3Region = interface;
   IS3Bucket = interface;
@@ -37,41 +38,38 @@ type
   ['{FF865D65-97EE-46BC-A1A6-9D9FFE6310A4}']
     function Bucket: IS3Bucket;
     function Name: string;
+    function Stream: IAWSStream;
   end;
 
   IS3Objects = interface(IInterface)
   ['{0CDE7D8E-BA30-4FD4-8FC0-F8291131652E}']
-    function Get(const AName: string; Stream: TStream; const SubResources: string): IS3Object;
-    function Get(const AName, AFileName: string; const SubResources: string): IS3Object;
-    function Get(const AName: string; const SubResources: string): IS3Object;
-    procedure Delete(const AName: string);
-    function Put(const AName, ContentType: string; Stream: TStream; const SubResources: string): IS3Object;
-    function Put(const AName, ContentType, AFileName, SubResources: string): IS3Object;
-    function Put(const AName, SubResources: string): IS3Object;
-    function Options(const AName: string): IS3Object;
+    function Get(const ObjectName: string; const SubResources: string): IS3Object;
+    procedure Delete(const ObjectName: string);
+    function Put(const ObjectName, ContentType: string; Stream: IAWSStream; const SubResources: string): IS3Object;
+    function Put(const ObjectName, ContentType, AFileName, SubResources: string): IS3Object;
+    function Put(const ObjectName, SubResources: string): IS3Object;
+    function Options(const ObjectName: string): IS3Object;
   end;
 
   IS3Bucket = interface(IInterface)
   ['{7E7FA31D-7F54-4BE0-8587-3A72E7D24164}']
-    function Region: IS3Region;
     function Name: string;
     function Objects: IS3Objects;
   end;
 
   IS3Buckets = interface(IInterface)
   ['{8F994521-57A1-4FA6-9F9F-3931E834EFE2}']
-    function Check(const AName: string): Boolean;
-    function Get(const AName, SubResources: string): IS3Bucket;
-    procedure Delete(const AName, SubResources: string);
-    function Put(const AName, SubResources: string): IS3Bucket;
+    function Check(const BucketName: string): Boolean;
+    function Get(const BucketName, SubResources: string): IS3Bucket;
+    procedure Delete(const BucketName, SubResources: string);
+    function Put(const BucketName, SubResources: string): IS3Bucket;
     { TODO : Return a Bucket list }
-    function All: IS3Response;
+    function All: IAWSResponse;
   end;
 
   IS3Region = interface(IInterface)
   ['{B192DB11-4080-477A-80D4-41698832F492}']
-    function Client: IAWSClient;
-    function IsOnline: Boolean;
+    function Online: Boolean;
     function Buckets: IS3Buckets;
   end;
 
@@ -79,61 +77,58 @@ type
   private
     FBucket: IS3Bucket;
     FName: string;
+    FStream: IAWSStream;
   public
-    constructor Create(Bucket: IS3Bucket; const AName: string);
+    constructor Create(Bucket: IS3Bucket; const AName: string; Stream: IAWSStream);
     function Bucket: IS3Bucket;
     function Name: string;
+    function Stream: IAWSStream;
   end;
 
   TS3Objects = class sealed(TInterfacedObject, IS3Objects)
   private
+    FClient: IAWSClient;
     FBucket: IS3Bucket;
   public
-    constructor Create(Bucket: IS3Bucket);
-    function Get(const AName: string; Stream: TStream; const SubResources: string): IS3Object;
-    function Get(const AName, AFileName: string; const SubResources: string): IS3Object;
-    function Get(const AName: string; const SubResources: string): IS3Object;
-    procedure Delete(const AName: string);
-    function Put(const AName, ContentType: string; Stream: TStream; const SubResources: string): IS3Object;
-    function Put(const AName, ContentType, AFileName, SubResources: string): IS3Object;
-    function Put(const AName, SubResources: string): IS3Object;
-    function Options(const AName: string): IS3Object;
+    constructor Create(Client: IAWSClient; Bucket: IS3Bucket);
+    function Get(const ObjectName: string; const SubResources: string): IS3Object;
+    procedure Delete(const ObjectName: string);
+    function Put(const ObjectName, ContentType: string; Stream: IAWSStream; const SubResources: string): IS3Object;
+    function Put(const ObjectName, ContentType, AFileName, SubResources: string): IS3Object;
+    function Put(const ObjectName, SubResources: string): IS3Object;
+    function Options(const ObjectName: string): IS3Object;
   end;
 
   TS3Region = class;
 
   TS3Bucket = class sealed(TInterfacedObject, IS3Bucket)
   private
-    FRegion: IS3Region;
+    FClient: IAWSClient;
     FName: string;
-    FObjects: IS3Objects;
   public
-    constructor Create(Region: IS3Region; const AName: string);
-    function Region: IS3Region;
+    constructor Create(Client: IAWSClient; const BucketName: string);
     function Name: string;
     function Objects: IS3Objects;
   end;
 
   TS3Buckets = class sealed(TInterfacedObject, IS3Buckets)
   private
-    FRegion: IS3Region;
+    FClient: IAWSClient;
   public
-    constructor Create(Region: IS3Region);
-    function Check(const AName: string): Boolean;
-    function Get(const AName, SubResources: string): IS3Bucket;
-    procedure Delete(const AName, SubResources: string);
-    function Put(const AName, SubResources: string): IS3Bucket;
-    function All: IS3Response;
+    constructor Create(Client: IAWSClient);
+    function Check(const BucketName: string): Boolean;
+    function Get(const BucketName, SubResources: string): IS3Bucket;
+    procedure Delete(const BucketName, SubResources: string);
+    function Put(const BucketName, SubResources: string): IS3Bucket;
+    function All: IAWSResponse;
   end;
 
   TS3Region = class sealed(TInterfacedObject, IS3Region)
   private
     FClient: IAWSClient;
-    FBuckets: IS3Buckets;
   public
-    constructor Create(AClient: IAWSClient);
-    function Client: IAWSClient;
-    function IsOnline: Boolean;
+    constructor Create(Client: IAWSClient);
+    function Online: Boolean;
     function Buckets: IS3Buckets;
   end;
 
@@ -141,11 +136,13 @@ implementation
 
 { TS3Object }
 
-constructor TS3Object.Create(Bucket: IS3Bucket; const AName: string);
+constructor TS3Object.Create(Bucket: IS3Bucket; const AName: string;
+  Stream: IAWSStream);
 begin
   inherited Create;
   FBucket := Bucket;
   FName := AName;
+  FStream := Stream;
 end;
 
 function TS3Object.Bucket: IS3Bucket;
@@ -158,132 +155,112 @@ begin
   Result := FName;
 end;
 
+function TS3Object.Stream: IAWSStream;
+begin
+  Result := FStream;
+end;
+
 { TS3Objects }
 
-constructor TS3Objects.Create(Bucket: IS3Bucket);
+constructor TS3Objects.Create(Client: IAWSClient; Bucket: IS3Bucket);
 begin
   inherited Create;
-  SetWeak(@FBucket, Bucket);
+  FClient := Client;
+  FBucket := Bucket;
 end;
 
-function TS3Objects.Get(const AName: string; Stream: TStream;
-  const SubResources: string): IS3Object;
+function TS3Objects.Get(const ObjectName: string; const SubResources: string): IS3Object;
 var
   Res: IAWSResponse;
 begin
-  Res := FBucket.Region.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'GET', FBucket.Name, '/' + AName, '/' + FBucket.Name + '/' + AName + SubResources
+      'GET', FBucket.Name, AWS_S3_URL, '/' + ObjectName, '/' + FBucket.Name + '/' + ObjectName + SubResources
     )
   );
-  Res.ResultStream.SaveToStream(Stream);
-  if 200 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Get error: %d', [Res.ResultCode]);
-  Result := TS3Object.Create(FBucket, AName);
+  if 200 <> Res.Code then
+    raise ES3Error.CreateFmt('Get error: %d', [Res.Code]);
+  Result := TS3Object.Create(FBucket, ObjectName, Res.Stream);
 end;
 
-function TS3Objects.Get(const AName, AFileName: string;
-  const SubResources: string): IS3Object;
-var
-  Buf: TFileStream;
-begin
-  Buf := TFileStream.Create(AFileName, fmCreate);
-  try
-    Result := Get(AName, Buf, SubResources);
-  finally
-    Buf.Free;
-  end;
-end;
-
-function TS3Objects.Get(const AName: string; const SubResources: string): IS3Object;
-begin
-  Result := Get(AName, nil, SubResources);
-end;
-
-procedure TS3Objects.Delete(const AName: string);
+procedure TS3Objects.Delete(const ObjectName: string);
 var
   Res: IAWSResponse;
 begin
-  Res := FBucket.Region.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'DELETE', FBucket.Name, '/' + AName, '/' + FBucket.Name + '/' + AName
+      'DELETE', FBucket.Name, AWS_S3_URL, '/' + ObjectName, '/' + FBucket.Name + '/' + ObjectName
     )
   );
-  if 204 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Delete error: %d', [Res.ResultCode]);
+  if 204 <> Res.Code then
+    raise ES3Error.CreateFmt('Delete error: %d', [Res.Code]);
 end;
 
-function TS3Objects.Put(const AName, ContentType: string; Stream: TStream;
-  const SubResources: string): IS3Object;
+function TS3Objects.Put(const ObjectName, ContentType: string;
+  Stream: IAWSStream; const SubResources: string): IS3Object;
 var
   Res: IAWSResponse;
 begin
-  Res := FBucket.Region.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'PUT', FBucket.Name, '/' + AName, SubResources, ContentType, '', '',
-      '/' + FBucket.Name + '/' + AName, Stream
+      'PUT', FBucket.Name, AWS_S3_URL, '/' + ObjectName, SubResources, ContentType, '', '',
+      '/' + FBucket.Name + '/' + ObjectName, Stream
     )
   );
-  if 200 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Put error: %d', [Res.ResultCode]);
-  Result := TS3Object.Create(FBucket, AName);
+  if 200 <> Res.Code then
+    raise ES3Error.CreateFmt('Put error: %d', [Res.Code]);
+  Result := TS3Object.Create(FBucket, ObjectName, Res.Stream);
 end;
 
-function TS3Objects.Put(const AName, ContentType, AFileName,
+function TS3Objects.Put(const ObjectName, ContentType, AFileName,
   SubResources: string): IS3Object;
 var
   Buf: TFileStream;
 begin
   Buf := TFileStream.Create(AFileName, fmOpenRead);
   try
-    Result := Put(AName, ContentType, Buf, SubResources);
+    Result := Put(ObjectName, ContentType, TAWSStream.Create(Buf), SubResources);
   finally
     Buf.Free;
   end;
 end;
 
-function TS3Objects.Put(const AName, SubResources: string): IS3Object;
+function TS3Objects.Put(const ObjectName, SubResources: string): IS3Object;
 var
   Buf: TMemoryStream;
 begin
   Buf := TMemoryStream.Create;
   try
-    // hack to synapse add Content-Length
+    // hack Synapse to add Content-Length
     Buf.WriteBuffer('', 1);
-    Result := Put(AName, '', Buf, SubResources);
+    Result := Put(ObjectName, '', TAWSStream.Create(Buf), SubResources);
   finally
     Buf.Free;
   end;
 end;
 
-function TS3Objects.Options(const AName: string): IS3Object;
+function TS3Objects.Options(const ObjectName: string): IS3Object;
 var
   Res: IAWSResponse;
 begin
   { TODO : Not working properly yet. }
-  Res := FBucket.Region.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'OPTIONS', FBucket.Name, '/' + AName, '/' + FBucket.Name + '/' + AName
+      'OPTIONS', FBucket.Name, AWS_S3_URL, '/' + ObjectName, '/' + FBucket.Name + '/' + ObjectName
     )
   );
-  if 200 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Get error: %d', [Res.ResultCode]);
-  Result := TS3Object.Create(FBucket, AName);
+  if 200 <> Res.Code then
+    raise ES3Error.CreateFmt('Get error: %d', [Res.Code]);
+  Result := TS3Object.Create(FBucket, ObjectName, Res.Stream);
 end;
 
 { TS3Bucket }
 
-constructor TS3Bucket.Create(Region: IS3Region; const AName: string);
+constructor TS3Bucket.Create(Client: IAWSClient; const BucketName: string);
 begin
   inherited Create;
-  FRegion := Region;
-  FName := AName;
-  FObjects := TS3Objects.Create(Self);
-end;
-
-function TS3Bucket.Region: IS3Region;
-begin
-  Result := FRegion;
+  FClient := Client;
+  FName := BucketName;
 end;
 
 function TS3Bucket.Name: string;
@@ -293,98 +270,94 @@ end;
 
 function TS3Bucket.Objects: IS3Objects;
 begin
-  Result := FObjects;
+  Result := TS3Objects.Create(FClient, Self);
 end;
 
 { TS3Buckets }
 
-constructor TS3Buckets.Create(Region: IS3Region);
+constructor TS3Buckets.Create(Client: IAWSClient);
 begin
   inherited Create;
-  SetWeak(@FRegion, Region);
+  FClient := Client;
 end;
 
-function TS3Buckets.Check(const AName: string): Boolean;
+function TS3Buckets.Check(const BucketName: string): Boolean;
 begin
-  Result := FRegion.Client.Send(
+  Result := FClient.Send(
     TAWSRequest.Create(
-      'HEAD', AName, '', '', '', '', '', '/' + AName + '/'
+      'HEAD', BucketName, AWS_S3_URL, '', '', '', '', '', '/' + BucketName + '/'
     )
-  ).ResultCode = 200;
+  ).Code = 200;
 end;
 
-function TS3Buckets.Get(const AName, SubResources: string): IS3Bucket;
+function TS3Buckets.Get(const BucketName, SubResources: string): IS3Bucket;
 var
   Res: IAWSResponse;
 begin
-  Res := FRegion.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'GET', AName, '', SubResources, '', '', '', '/' + AName + '/' + SubResources
+      'GET', BucketName, AWS_S3_URL, '', SubResources, '', '', '', '/' + BucketName + '/' + SubResources
     )
   );
-  if 200 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Get error: %d', [Res.ResultCode]);
-  Result := TS3Bucket.Create(FRegion, AName);
+  if 200 <> Res.Code then
+    raise ES3Error.CreateFmt('Get error: %d', [Res.Code]);
+  Result := TS3Bucket.Create(FClient, BucketName);
 end;
 
-procedure TS3Buckets.Delete(const AName, SubResources: string);
+procedure TS3Buckets.Delete(const BucketName, SubResources: string);
 var
   Res: IAWSResponse;
 begin
-  Res := FRegion.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'DELETE', AName, '', SubResources, '', '', '', '/' + AName + SubResources
+      'DELETE', BucketName, AWS_S3_URL, '', SubResources, '', '', '', '/' + BucketName + SubResources
     )
   );
-  if 204 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Delete error: %d', [Res.ResultCode]);
+  if 204 <> Res.Code then
+    raise ES3Error.CreateFmt('Delete error: %d', [Res.Code]);
 end;
 
-function TS3Buckets.Put(const AName, SubResources: string): IS3Bucket;
+function TS3Buckets.Put(const BucketName, SubResources: string): IS3Bucket;
 var
   Res: IAWSResponse;
 begin
-  Res := FRegion.Client.Send(
+  Res := FClient.Send(
     TAWSRequest.Create(
-      'PUT', AName, '', SubResources, '', '', '', '/' + AName + SubResources
+      'PUT', BucketName, AWS_S3_URL, '', SubResources, '', '', '', '/' + BucketName + SubResources
     )
   );
-  if 200 <> Res.ResultCode then
-    raise ES3Error.CreateFmt('Put error: %d', [Res.ResultCode]);
-  Result := TS3Bucket.Create(FRegion, AName);
+  if 200 <> Res.Code then
+    raise ES3Error.CreateFmt('Put error: %d', [Res.Code]);
+  Result := TS3Bucket.Create(FClient, BucketName);
 end;
 
-function TS3Buckets.All: IS3Response;
+function TS3Buckets.All: IAWSResponse;
 begin
-  Result := FRegion.Client.Send(TAWSRequest.Create('GET', '','', '', '', '', '', '/'));
+  Result := FClient.Send(
+    TAWSRequest.Create('GET', '', AWS_S3_URL, '', '', '', '', '', '/')
+  );
 end;
 
 { TS3Region }
 
-constructor TS3Region.Create(AClient: IAWSClient);
+constructor TS3Region.Create(Client: IAWSClient);
 begin
   inherited Create;
-  FClient := AClient;
-  FBuckets := TS3Buckets.Create(Self);
+  FClient := Client;
 end;
 
-function TS3Region.Client: IAWSClient;
+function TS3Region.Online: Boolean;
 begin
-  Result := FClient;
-end;
-
-function TS3Region.IsOnline: Boolean;
-begin
-  Result := Client.Send(
+  Result := FClient.Send(
     TAWSRequest.Create(
-      'GET', '', '', '', '', '', '', '/'
+      'GET', '', AWS_S3_URL, '', '', '', '', '', '/'
     )
-  ).ResultCode = 200;
+  ).Code = 200;
 end;
 
 function TS3Region.Buckets: IS3Buckets;
 begin
-  Result := FBuckets;
+  Result := TS3Buckets.Create(FClient);
 end;
 
 end.

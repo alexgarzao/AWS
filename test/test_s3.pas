@@ -1,6 +1,6 @@
 {
     AWS
-    Copyright (C) 2013-2014 by mdbs99
+    Copyright (C) 2013-2015 Marcos Douglas - mdbs99
 
     See the files COPYING.GH, included in this
     distribution, for details about the copyright.
@@ -22,6 +22,7 @@ uses
   fpcunit,
   testregistry,
   //aws
+  aws_base,
   aws_client,
   aws_s3;
 
@@ -42,14 +43,13 @@ type
     FClient: IAWSClient;
   protected
     procedure SetUp; override;
-    procedure TearDown; override;
     function Client: TAWSFakeClient;
   end;
 
   TS3RegionTest = class(TS3Test)
   published
     procedure TestIsOnline;
-    procedure TestBuckets;
+    procedure TestImmutableBuckets;
   end;
 
   TS3BucketsTest = class(TS3Test)
@@ -58,6 +58,7 @@ type
     procedure TestGet;
     procedure TestDelete;
     procedure TestPut;
+    procedure TestImmutable;
   end;
 
   TS3ObjectsTest = class(TS3Test)
@@ -66,6 +67,7 @@ type
     procedure TestDelete;
     procedure TestPut;
     procedure TestOptions;
+    procedure TestImmutable;
   end;
 
 implementation
@@ -98,7 +100,9 @@ begin
   end;
   Stream := TStringStream.Create(Header + #13 + Text);
   try
-    FResponse := TAWSResponse.Create(Code, Header, Text, Stream);
+    FResponse := TAWSResponse.Create(
+      Code, Header, Text, TAWSStream.Create(Stream)
+    );
     Result := FResponse;
   finally
     Stream.Free;
@@ -124,11 +128,6 @@ begin
   FClient := TAWSFakeClient.Create;
 end;
 
-procedure TS3Test.TearDown;
-begin
-  inherited TearDown;
-end;
-
 function TS3Test.Client: TAWSFakeClient;
 begin
   Result := FClient as TAWSFakeClient;
@@ -138,133 +137,149 @@ end;
 
 procedure TS3RegionTest.TestIsOnline;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
 begin
-  R := TS3Region.Create(FClient);
-  AssertTrue('Service denied', R.IsOnline);
+  Rgn := TS3Region.Create(FClient);
+  AssertTrue('Service denied', Rgn.Online);
   AssertEquals('GET', Client.Request.Method);
   AssertEquals('/', Client.Request.CanonicalizedResource);
 end;
 
-procedure TS3RegionTest.TestBuckets;
+procedure TS3RegionTest.TestImmutableBuckets;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
 begin
-  R := TS3Region.Create(FClient);
-  AssertNotNull('Buckets not alive', R.Buckets);
+  Rgn := TS3Region.Create(FClient);
+  AssertNotNull('Buckets not alive', Rgn.Buckets);
+  AssertNotSame(Rgn.Buckets, Rgn.Buckets);
 end;
 
 { TS3BucketsTest }
 
 procedure TS3BucketsTest.TestCheck;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
 begin
-  R := TS3Region.Create(FClient);
-  AssertTrue(R.Buckets.Check('myawsbucket'));
+  Rgn := TS3Region.Create(FClient);
+  AssertTrue(Rgn.Buckets.Check('myawsbucket'));
   AssertEquals('HEAD', Client.Request.Method);
-  AssertEquals(200, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-  AssertEquals('OK', Client.Response.ResultText);
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
 end;
 
 procedure TS3BucketsTest.TestGet;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
   Bkt: IS3Bucket;
 begin
-  R := TS3Region.Create(FClient);
-  Bkt := R.Buckets.Get('myawsbucket', '');
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
   AssertEquals('myawsbucket', Bkt.Name);
   AssertEquals('GET', Client.Request.Method);
-  AssertEquals(200, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-  AssertEquals('OK', Client.Response.ResultText);
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
 end;
 
 procedure TS3BucketsTest.TestDelete;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
 begin
-  R := TS3Region.Create(FClient);
-  R.Buckets.Delete('quotes', '/');
+  Rgn := TS3Region.Create(FClient);
+  Rgn.Buckets.Delete('quotes', '/');
   AssertEquals('DELETE', Client.Request.Method);
-  AssertEquals(204, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 204 No Content', Client.Response.ResultHeader);
-  AssertEquals('No Content', Client.Response.ResultText);
+  AssertEquals(204, Client.Response.Code);
+  AssertEquals('HTTP/1.1 204 No Content', Client.Response.Header);
+  AssertEquals('No Content', Client.Response.Text);
 end;
 
 procedure TS3BucketsTest.TestPut;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
 begin
-  R := TS3Region.Create(FClient);
-  R.Buckets.Put('colorpictures', '/');
+  Rgn := TS3Region.Create(FClient);
+  Rgn.Buckets.Put('colorpictures', '/');
   AssertEquals('PUT', Client.Request.Method);
-  AssertEquals(200, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-  AssertEquals('OK', Client.Response.ResultText);
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
+end;
+
+procedure TS3BucketsTest.TestImmutable;
+var
+  Rgn: IS3Region;
+  Bkt: IS3Bucket;
+begin
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
+  AssertNotSame(Bkt.Objects, Bkt.Objects);
 end;
 
 { TS3ObjectsTest }
 
 procedure TS3ObjectsTest.TestGet;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
   Bkt: IS3Bucket;
-  Stream: TMemoryStream;
+  Obj: IS3Object;
 begin
-  R := TS3Region.Create(FClient);
-  Bkt := R.Buckets.Get('myawsbucket', '');
-  Stream := TMemoryStream.Create;
-  try
-    Bkt.Objects.Get('myobj', Stream, '');
-    AssertEquals(200, Client.Response.ResultCode);
-    AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-    AssertEquals('OK', Client.Response.ResultText);
-    AssertTrue('Stream size is zero', Stream.Size > 0);
-  finally
-    Stream.Free;
-  end;
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
+  Obj := Bkt.Objects.Get('foo.txt', '');
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
+  AssertTrue('Stream size is zero', Obj.Stream.Size > 0);
 end;
 
 procedure TS3ObjectsTest.TestDelete;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
   Bkt: IS3Bucket;
 begin
-  R := TS3Region.Create(FClient);
-  Bkt := R.Buckets.Get('myawsbucket', '');
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
   Bkt.Objects.Delete('myobj');
-  AssertEquals(204, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 204 No Content', Client.Response.ResultHeader);
-  AssertEquals('No Content', Client.Response.ResultText);
+  AssertEquals(204, Client.Response.Code);
+  AssertEquals('HTTP/1.1 204 No Content', Client.Response.Header);
+  AssertEquals('No Content', Client.Response.Text);
 end;
 
 procedure TS3ObjectsTest.TestPut;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
   Bkt: IS3Bucket;
 begin
-  R := TS3Region.Create(FClient);
-  Bkt := R.Buckets.Get('myawsbucket', '');
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
   Bkt.Objects.Put('myobj', 'text/plain', nil, '');
-  AssertEquals(200, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-  AssertEquals('OK', Client.Response.ResultText);
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
 end;
 
 procedure TS3ObjectsTest.TestOptions;
 var
-  R: IS3Region;
+  Rgn: IS3Region;
   Bkt: IS3Bucket;
 begin
-  R := TS3Region.Create(FClient);
-  Bkt := R.Buckets.Get('myawsbucket', '');
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
   Bkt.Objects.Options('myobj');
-  AssertEquals(200, Client.Response.ResultCode);
-  AssertEquals('HTTP/1.1 200 OK', Client.Response.ResultHeader);
-  AssertEquals('OK', Client.Response.ResultText);
+  AssertEquals(200, Client.Response.Code);
+  AssertEquals('HTTP/1.1 200 OK', Client.Response.Header);
+  AssertEquals('OK', Client.Response.Text);
+end;
+
+procedure TS3ObjectsTest.TestImmutable;
+var
+  Rgn: IS3Region;
+  Bkt: IS3Bucket;
+begin
+  Rgn := TS3Region.Create(FClient);
+  Bkt := Rgn.Buckets.Get('myawsbucket', '');
+  AssertNotSame(Bkt.Objects, Bkt.Objects);
 end;
 
 initialization
